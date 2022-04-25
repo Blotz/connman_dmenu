@@ -5,15 +5,22 @@ readonly VPN_STORAGE_PATH=/var/lib/connman-vpn
 
 get_services() {
 	if [[ -f $SCAN_RESULT ]]; then
-		dmenu_notify 'another connman_dmenu is running'
+		dunstify 'another connman_dmenu is running' -t 2000
 		exit 1
 	fi
 	trap "rm -f $SCAN_RESULT" EXIT
-	connmanctl enable wifi &>/dev/null
-	connmanctl scan wifi &>/dev/null
-	connmanctl services | \
-		awk -F ' +' '{ service_id=$NF; $NF=""; $1=""; name=substr($0, 2, length-2); gsub(/[^a-zA-Z0-9-]/, "_", name) }
-	name { print name, service_id }' > $SCAN_RESULT
+
+	wifiactive="$(rfkill --output SOFT --noheadings list wifi)"
+	if [[ $wifiactive =~ "unblocked" ]]; then
+		dunstify "Scanning wifi" -t 2000
+        	connmanctl scan wifi &>/dev/null
+		connmanctl services | \
+			awk -F ' +' '{ service_id=$NF; $NF=""; $1=""; name=substr($0, 2, length-2); gsub(/[^a-zA-Z0-9-]/, "_", name) }
+		name { print name, service_id }' > $SCAN_RESULT
+	else
+		dunstify 'Wifi is disabled' -t 3000
+		exit 1
+	fi
 }
 
 # $1 = index
@@ -86,10 +93,12 @@ dmenu_ask() {
 	fi
 }
 
-if (( EUID != 0 )); then
-	dmenu_notify 'please run it as root'
-	exit 1
-fi
+##Removed root check
+# 
+# if (( EUID != 0 )); then
+# 	dmenu_notify 'please run it as root'
+# 	exit 1
+# fi
 
 get_services
 index="$(create_dmenu | dmenu -l 10 -i -p 'select wifi service' | sed 's/^ *//g' | cut -d ' ' -f 1)"
